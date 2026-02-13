@@ -1,5 +1,7 @@
 Revision history for Directory-Queue:
 
+noop
+
 2.2	Tue Jul 19 2022
 	* Directory::Queue::Normal now uses the safest method to count
           the number of elements in the queue, this can be changed using
