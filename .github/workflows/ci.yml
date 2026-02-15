@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "*"
+    tags-ignore:
+      - "*"
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  ubuntu:
+    runs-on: ubuntu-latest
+    name: "Ubuntu (system Perl)"
+
+    env:
+      PERL_USE_UNSAFE_INC: 0
+      AUTHOR_TESTING: 1
+      AUTOMATED_TESTING: 1
+      RELEASE_TESTING: 1
+      PERL_CARTON_PATH: ${{ github.workspace }}/local
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: perl -V
+      - name: Install Dependencies
+        uses: perl-actions/install-with-cpm@v1
+        with:
+          cpanfile: ".github/cpanfile"
+      - run: perl Makefile.PL
+      - run: make
+      - run: make test
+
+  perl-versions:
+    runs-on: ubuntu-latest
+    name: List Perl versions
+    outputs:
+      perl-versions: ${{ steps.action.outputs.perl-versions }}
+    steps:
+      - id: action
+        uses: perl-actions/perl-versions@v1
+        with:
+          since-perl: v5.10
+          with-devel: true
+
+  linux:
+    runs-on: ubuntu-latest
+    name: "Linux / Perl ${{ matrix.perl-version }}"
+
+    needs:
+      - ubuntu
+      - perl-versions
+
+    env:
+      PERL_USE_UNSAFE_INC: 0
+      AUTOMATED_TESTING: 1
+
+    strategy:
+      fail-fast: false
+      matrix:
+        perl-version: ${{ fromJson(needs.perl-versions.outputs.perl-versions) }}
+
+    container: perldocker/perl-tester:${{ matrix.perl-version }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: perl -V
+      - name: Install Dependencies
+        run: cpm install -g --show-build-log-on-failure
+      - run: perl Makefile.PL
+      - run: make
+      - run: make test
+
+  macOS:
+    runs-on: macos-latest
+    name: "macOS / Perl ${{ matrix.perl-version }}"
+
+    needs:
+      - ubuntu
+
+    env:
+      PERL_USE_UNSAFE_INC: 0
+      AUTOMATED_TESTING: 1
+
+    strategy:
+      fail-fast: false
+      matrix:
+        perl-version:
+          - "5.38"
+          - "latest"
+
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned to v1.33.0 due to attestation bug in v1.34+ (shogo82148/actions-setup-perl#2481)
+      - uses: shogo82148/actions-setup-perl@v1.33.0
+        with:
+          perl-version: ${{ matrix.perl-version }}
+      - run: perl -V
+      - name: Install Dependencies
+        run: |
+          cpanm --notest --installdeps .
+      - run: perl Makefile.PL
+      - run: make
+      - run: make test
+
+  coverage:
+    runs-on: ubuntu-latest
+    name: "Coverage"
+
+    needs:
+      - ubuntu
+
+    container: perldocker/perl-tester:5.40
+
+    env:
+      PERL_USE_UNSAFE_INC: 0
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Dependencies
+        run: |
+          cpm install -g --show-build-log-on-failure
+          cpm install -g Devel::Cover Devel::Cover::Report::Coveralls
+      - run: perl Makefile.PL
+      - run: make
+      - name: Run coverage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cover -test -report coveralls
