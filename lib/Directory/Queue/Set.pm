@@ -23,6 +23,7 @@ our $REVISION = sprintf("%d.%02d", q$Revision: 1.12 $ =~ /(\d+)\.(\d+)/);
 #
 
 use No::Worries::Die qw(dief);
+use Scalar::Util qw(blessed);
 
 #
 # return true if the given thing is a Directory::Queue object
@@ -31,7 +32,7 @@ use No::Worries::Die qw(dief);
 sub _isdq ($) {
     my($thing) = @_;
 
-    return(ref($thing) && $thing->isa("Directory::Queue"));
+    return(blessed($thing) && $thing->isa("Directory::Queue"));
 }
 
 #
