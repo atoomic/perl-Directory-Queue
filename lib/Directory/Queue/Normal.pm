@@ -23,7 +23,7 @@ our $REVISION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 # used modules
 #
 
-use Directory::Queue qw(_create _name _touch /Regexp/ /special/);
+use Directory::Queue qw(_check_element _create _name _touch /Regexp/ /special/);
 use Encode qw(encode decode FB_CROAK LEAVE_SRC);
 use No::Worries::Die qw(dief);
 use No::Worries::File qw(file_read file_write);
@@ -184,17 +184,6 @@ sub _subdirs ($$) {
     my($self, $path) = @_;
 
     return($self->{nlink} ? _subdirs_stat($path) : _subdirs_readdir($path));
-}
-
-#
-# check the given string to make sure it represents a valid element name
-#
-
-sub _check_element ($) {
-    my($element) = @_;
-
-    dief("invalid element: %s", $element)
-        unless $element =~ m/^(?:$_DirectoryRegexp)\/(?:$_ElementRegexp)$/o;
 }
 
 #+++############################################################################
@@ -401,6 +390,7 @@ sub unlock : method {
 sub touch : method {
     my($self, $element) = @_;
 
+    _check_element($element);
     _touch($self->{"path"}."/".$element);
 }
 
