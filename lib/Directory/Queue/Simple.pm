@@ -245,6 +245,7 @@ sub remove : method {
 
     $path = $self->{path}."/".$name;
     $lock = $path . LOCKED_SUFFIX;
+    dief("cannot remove %s: not locked", $name) unless -f $lock;
     unlink($path) or dief("cannot unlink(%s): %s", $path, $!);
     unlink($lock) or dief("cannot unlink(%s): %s", $lock, $!);
 }
@@ -306,7 +307,7 @@ sub purge : method {
 
     # check options
     $option{maxtemp} = $self->{maxtemp} unless defined($option{maxtemp});
-    $option{maxlock} = $self->{maxtemp} unless defined($option{maxlock});
+    $option{maxlock} = $self->{maxlock} unless defined($option{maxlock});
     foreach my $name (keys(%option)) {
         dief("unexpected option: %s", $name)
             unless $name =~ /^(maxtemp|maxlock)$/;

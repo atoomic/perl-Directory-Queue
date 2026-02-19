@@ -439,6 +439,7 @@ sub remove : method {
     }
     # remove the locked directory
     $path = $temp."/".LOCKED_DIRECTORY;
+    my $retries = 0;
     while (1) {
         rmdir($path) or dief("cannot rmdir(%s): %s", $path, $!);
         rmdir($temp) and return;
@@ -447,6 +448,8 @@ sub remove : method {
         # RACE: this can happen if an other process managed to lock this element
         # while it was being removed (see the comment in the lock() method)
         # so we try to remove the lock again and again...
+        dief("cannot remove %s: too many lock contentions", $temp)
+            if ++$retries > 10;
     }
 }
 
