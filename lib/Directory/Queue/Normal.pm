@@ -812,8 +812,14 @@ The goal of this module is to offer a "normal" (as opposed to "simple") queue
 system using the underlying filesystem for storage, security and to prevent
 race conditions via atomic operations.
 
-It allows arbitrary data to be stored (see the L</SCHEMA> section for more
-information) but it has a significant disk space and speed overhead.
+It allows structured data to be stored using a schema that defines named
+fields of different types (binary, string, table). See the L</SCHEMA>
+section for more information. Each element is stored as a directory
+containing one file per schema field.
+
+This queue type has more disk space and speed overhead than
+L<Directory::Queue::Simple>. Use it when you need structured data with
+multiple fields per element.
 
 Please refer to L<Directory::Queue> for general information about directory
 queues.
@@ -900,12 +906,19 @@ UTF-8 encoded before being stored in a file
 =back
 
 By default, all pieces of data are mandatory. If you append a question mark to
-the type, this piece of data will be marked as optional. See the comments in
-the L</SYNOPSIS> section for an example.
+the type, this piece of data will be marked as optional.
 
 By default, string or binary data is used directly. If you append an asterisk
 to the type, the data that you add or get will be by reference. This can be
 useful to avoid string copies of large amounts of data.
+
+Here is a schema example:
+
+  my $schema = {
+      body   => "string",    # mandatory UTF-8 text
+      header => "table?",    # optional key-value hash
+      data   => "binary*?",  # optional binary, passed by reference
+  };
 
 =head1 METHODS
 
@@ -977,12 +990,12 @@ remove the given element (which must be locked) from the queue
 get the data from the given element (which must be locked) and return
 basically the same hash as what add() got (in list context, the hash is
 returned directly while in scalar context, the hash reference is returned
-instead); the schema must be knownand the data must conform to it
+instead); the schema must be known and the data must conform to it
 
 =item purge([OPTIONS])
 
 purge the queue by removing unused intermediate directories, removing too old
-temporary elements and unlocking too old locked elements (aka staled locks);
+temporary elements and unlocking too old locked elements (aka stale locks);
 note: this can take a long time on queues with many elements; OPTIONS can be:
 
 =over

@@ -379,7 +379,30 @@ The goal of this module is to offer a "simple" (as opposed to "normal") queue
 system using the underlying filesystem for storage, security and to prevent
 race conditions via atomic operations.
 
-It only allows binary strings to be stored but it is fast and small.
+It only allows binary strings to be stored but it is fast and uses minimal
+disk space. This is the recommended queue type for most use cases.
+
+Compared to L<Directory::Queue::Normal>:
+
+=over
+
+=item *
+
+simpler API and smaller disk footprint
+
+=item *
+
+faster operations (fewer filesystem calls per element)
+
+=item *
+
+can accept existing files via add_path() (zero-copy enqueue)
+
+=item *
+
+no schema support — stores and retrieves binary strings only
+
+=back
 
 Please refer to L<Directory::Queue> for general information about directory
 queues.
@@ -517,7 +540,7 @@ be read but not removed, you must use the remove() method for this
 =item purge([OPTIONS])
 
 purge the queue by removing unused intermediate directories, removing too old
-temporary elements and unlocking too old locked elements (aka staled locks);
+temporary elements and unlocking too old locked elements (aka stale locks);
 note: this can take a long time on queues with many elements; OPTIONS can be:
 
 =over

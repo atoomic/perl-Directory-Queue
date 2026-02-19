@@ -418,9 +418,7 @@ Directory::Queue - object oriented interface to a directory based queue
 
   my $dirq = Directory::Queue->new(path => "/tmp/test");
   foreach my $count (1 .. 100) {
-      my $name = $dirq->add(<<'EOS');
-... some data ...
-EOS
+      my $name = $dirq->add("element $count\n");
       printf("# added element %d as %s\n", $count, $name);
   }
 
@@ -437,6 +435,22 @@ EOS
       $dirq->remove($name);
   }
 
+  #
+  # looping consumer with periodic purging
+  #
+
+  $dirq = Directory::Queue->new(path => "/tmp/test");
+  while (1) {
+      sleep(1) unless $dirq->count();
+      for (my $name = $dirq->first(); $name; $name = $dirq->next()) {
+          next unless $dirq->lock($name);
+          my $data = $dirq->get($name);
+          # process $data ...
+          $dirq->remove($name);
+      }
+      $dirq->purge();
+  }
+
 =head1 DESCRIPTION
 
 The goal of this module is to offer a queue system using the underlying
@@ -444,11 +458,33 @@ filesystem for storage, security and to prevent race conditions via atomic
 operations. It focuses on simplicity, robustness and scalability.
 
 This module allows multiple concurrent readers and writers to interact with
-the same queue. A Python implementation of the same algorithm is available at
-L<https://github.com/cern-mig/python-dirq>, a Java implementation at
-L<https://github.com/cern-mig/java-dirq> and a C implementation at
-L<https://github.com/cern-mig/c-dirq> so readers and writers can be written
-in different programming languages.
+the same queue.
+
+Key features:
+
+=over
+
+=item *
+
+Atomic operations prevent race conditions between concurrent processes
+
+=item *
+
+No external daemon or service required -- uses the filesystem directly
+
+=item *
+
+Multiple queue types for different use cases (simple binary strings or
+structured data with schemas)
+
+=item *
+
+Interoperable with implementations in other languages:
+L<Python|https://github.com/cern-mig/python-dirq>,
+L<Java|https://github.com/cern-mig/java-dirq>,
+L<C|https://github.com/cern-mig/c-dirq>
+
+=back
 
 There is no knowledge of priority within a queue. If multiple priorities are
 needed, multiple queues should be used.
@@ -561,8 +597,8 @@ working with it. In fact, the get() and remove() methods report a fatal error
 if they are called on unlocked elements.
 
 If the process that created the lock dies without unlocking the element, we
-end up with a staled lock. The purge() method can be used to remove these
-staled locks.
+end up with a stale lock. The purge() method can be used to remove these
+stale locks.
 
 An element can basically be in only one of two states: locked or unlocked.
 
@@ -574,6 +610,15 @@ Iterators return all the elements, regardless of their states.
 There is no method to get an element state as this information is usually
 useless since it may change at any time. Instead, programs should directly try
 to lock elements to make sure they are indeed locked.
+
+Here is the typical locking pattern:
+
+  for (my $name = $dirq->first(); $name; $name = $dirq->next()) {
+      next unless $dirq->lock($name);    # skip if already locked
+      my $data = $dirq->get($name);       # read the element data
+      # ... process $data ...
+      $dirq->remove($name);              # remove the element
+  }
 
 =head1 CONSTRUCTOR
 
@@ -643,7 +688,7 @@ security features (owner, group, permissions, ACLs...) should be used to
 adequately protect the data.
 
 By default, the process' umask is respected. See the class constructor
-documentation if you want an other behavior.
+documentation if you want another behavior.
 
 If multiple readers and writers with different uids are expected, the easiest
 solution is to have all the files and directories inside the toplevel

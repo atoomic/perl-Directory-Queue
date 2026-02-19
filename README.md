@@ -1,229 +1,222 @@
-# NAME
+# Directory::Queue
 
-Directory::Queue - Object oriented interface to a directory based queue
+[![CI](https://github.com/atoomic/perl-Directory-Queue/actions/workflows/ci.yml/badge.svg)](https://github.com/atoomic/perl-Directory-Queue/actions/workflows/ci.yml)
+[![CPAN version](https://img.shields.io/cpan/v/Directory-Queue)](https://metacpan.org/pod/Directory::Queue)
+[![License: Perl](https://img.shields.io/cpan/l/Directory-Queue)](https://dev.perl.org/licenses/)
 
-# VERSION
+Object oriented interface to a directory based queue.
 
-version 2.3
+## Overview
 
-# SYNOPSIS
+Directory::Queue provides a queue system using the filesystem for storage.
+It uses atomic operations to prevent race conditions, making it safe for
+multiple concurrent readers and writers without requiring an external daemon
+or service.
+
+**Key features:**
+
+- Atomic operations via `link()`/`mkdir()` — no race conditions
+- Multiple concurrent readers and writers on the same queue
+- No external daemon required — pure filesystem
+- Multiple queue types: simple (binary strings) or normal (structured schemas)
+- Interoperable with [Python](https://github.com/cern-mig/python-dirq), [Java](https://github.com/cern-mig/java-dirq), and [C](https://github.com/cern-mig/c-dirq) implementations
+
+## Installation
+
+From CPAN:
+
+```bash
+cpanm Directory::Queue
+```
+
+Or manually:
+
+```bash
+perl Makefile.PL
+make
+make test
+make install
+```
+
+### Dependencies
+
+- [No::Worries](https://metacpan.org/pod/No::Worries) (>= 1.4)
+- [Encode](https://metacpan.org/pod/Encode)
+- [POSIX](https://metacpan.org/pod/POSIX)
+- [Time::HiRes](https://metacpan.org/pod/Time::HiRes)
+
+## Quick Start
+
+### Producer
 
 ```perl
 use Directory::Queue;
 
-#
-# sample producer
-#
+my $dirq = Directory::Queue->new(path => "/tmp/myqueue");
 
-my $dirq = Directory::Queue->new(path => "/tmp/test");
 foreach my $count (1 .. 100) {
-    my $name = $dirq->add(<<'EOS');
-  ... some data ...
-  EOS
-    printf("# added element %d as %s\n", $count, $name);
+    my $name = $dirq->add("element $count\n");
+    printf("added element %d as %s\n", $count, $name);
 }
+```
 
-#
-# sample consumer (one pass only)
-#
+### Consumer (single pass)
 
-$dirq = Directory::Queue->new(path => "/tmp/test");
+```perl
+use Directory::Queue;
+
+my $dirq = Directory::Queue->new(path => "/tmp/myqueue");
+
 for (my $name = $dirq->first(); $name; $name = $dirq->next()) {
     next unless $dirq->lock($name);
-    printf("# reading element %s\n", $name);
     my $data = $dirq->get($name);
-    # one could use $dirq->unlock($name) to only browse the queue...
+    print "got: $data";
     $dirq->remove($name);
 }
 ```
 
-# DESCRIPTION
-
-The goal of this module is to offer a queue system using the underlying
-filesystem for storage, security and to prevent race conditions via atomic
-operations. It focuses on simplicity, robustness and scalability.
-
-This module allows multiple concurrent readers and writers to interact with
-the same queue. A Python implementation of the same algorithm is available at
-[https://github.com/cern-mig/python-dirq](https://github.com/cern-mig/python-dirq), a Java implementation at
-[https://github.com/cern-mig/java-dirq](https://github.com/cern-mig/java-dirq) and a C implementation at
-[https://github.com/cern-mig/c-dirq](https://github.com/cern-mig/c-dirq) so readers and writers can be written
-in different programming languages.
-
-There is no knowledge of priority within a queue. If multiple priorities are
-needed, multiple queues should be used.
-
-# NAME
-
-Directory::Queue - object oriented interface to a directory based queue
-
-# TERMINOLOGY
-
-An element is something that contains one or more pieces of data. With
-[Directory::Queue::Simple](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ASimple) queues, an element can only contain one binary
-string. With [Directory::Queue::Normal](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ANormal) queues, more complex data schemas can
-be used.
-
-A queue is a "best effort" FIFO (First In - First Out) collection of elements.
-
-It is very hard to guarantee pure FIFO behavior with multiple writers using
-the same queue. Consider for instance:
-
-- Writer1: calls the add() method
-- Writer2: calls the add() method
-- Writer2: the add() method returns
-- Writer1: the add() method returns
-
-Who should be first in the queue, Writer1 or Writer2?
-
-For simplicity, this implementation provides only "best effort" FIFO,
-i.e. there is a very high probability that elements are processed in FIFO
-order but this is not guaranteed. This is achieved by using a high-resolution
-timer and having elements sorted by the time their final directory gets
-created.
-
-# QUEUE TYPES
-
-Different queue types are supported. More detailed information can be found in
-the modules implementing these types:
-
-- [Directory::Queue::Normal](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ANormal)
-- [Directory::Queue::Simple](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ASimple)
-- [Directory::Queue::Null](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ANull)
-
-Compared to [Directory::Queue::Normal](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ANormal), [Directory::Queue::Simple](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ASimple):
-
-- is simpler
-- is faster
-- uses less space on disk
-- can be given existing files to store
-- does not support schemas
-- can only store and retrieve binary strings
-- is not compatible (at filesystem level) with Directory::Queue::Normal
-
-[Directory::Queue::Null](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ANull) is special: it is a kind of black hole with the same
-API as the other directory queues.
-
-# LOCKING
-
-Adding an element is not a problem because the add() method is atomic.
-
-In order to support multiple reader processes interacting with the same queue,
-advisory locking is used. Processes should first lock an element before
-working with it. In fact, the get() and remove() methods report a fatal error
-if they are called on unlocked elements.
-
-If the process that created the lock dies without unlocking the element, we
-end up with a staled lock. The purge() method can be used to remove these
-staled locks.
-
-An element can basically be in only one of two states: locked or unlocked.
-
-A newly created element is unlocked as a writer usually does not need to do
-anything more with it.
-
-Iterators return all the elements, regardless of their states.
-
-There is no method to get an element state as this information is usually
-useless since it may change at any time. Instead, programs should directly try
-to lock elements to make sure they are indeed locked.
-
-# CONSTRUCTOR
-
-The new() method of this module can be used to create a Directory::Queue
-object that will later be used to interact with the queue. It can have a
-`type` attribute specifying the queue type to use. If not specified, the type
-defaults to `Simple`.
-
-This method is however only a wrapper around the constructor of the underlying
-module implementing the functionality. So:
+### Looping consumer with purging
 
 ```perl
-$dirq = Directory::Queue->new(type => Foo, ... options ...);
+use Directory::Queue;
+
+my $dirq = Directory::Queue->new(path => "/tmp/myqueue");
+
+while (1) {
+    sleep(1) unless $dirq->count();
+    for (my $name = $dirq->first(); $name; $name = $dirq->next()) {
+        next unless $dirq->lock($name);
+        my $data = $dirq->get($name);
+        # ... process $data ...
+        $dirq->remove($name);
+    }
+    $dirq->purge();  # clean up stale locks and temp files
+}
 ```
 
-is identical to:
+## Queue Types
 
+| Type | Module | Use Case |
+|------|--------|----------|
+| **Simple** | [Directory::Queue::Simple](https://metacpan.org/pod/Directory::Queue::Simple) | Fast, lightweight — stores binary strings |
+| **Normal** | [Directory::Queue::Normal](https://metacpan.org/pod/Directory::Queue::Normal) | Structured data with schemas (binary, string, table) |
+| **Null** | [Directory::Queue::Null](https://metacpan.org/pod/Directory::Queue::Null) | Black hole — discards everything (useful for testing) |
+| **Set** | [Directory::Queue::Set](https://metacpan.org/pod/Directory::Queue::Set) | Merge-iterate over multiple queues |
+
+By default, `Directory::Queue->new(...)` creates a **Simple** queue. To use
+a different type:
+
+```perl
+# Explicit type via the base class
+my $dirq = Directory::Queue->new(path => "/tmp/q", type => "Normal");
+
+# Or use the subclass directly
+my $dirq = Directory::Queue::Normal->new(
+    path   => "/tmp/q",
+    schema => { body => "string", header => "table?" },
+);
 ```
-$dirq = Directory::Queue::Foo->new(... options ...);
+
+### Simple vs Normal
+
+**Simple** queues are recommended for most use cases. They are faster, use
+less disk space, and have a simpler API. Each element is a single binary
+string stored in a file.
+
+**Normal** queues support structured data via schemas. Each element is a
+directory containing multiple files (one per schema field). Fields can be
+binary strings, UTF-8 text strings, or key-value tables. This is useful when
+elements need to carry metadata alongside their payload.
+
+## Locking
+
+The locking mechanism ensures safe concurrent access:
+
+```perl
+for (my $name = $dirq->first(); $name; $name = $dirq->next()) {
+    next unless $dirq->lock($name);    # skip if already locked by another process
+    my $data = $dirq->get($name);       # read (requires lock)
+    # ... process $data ...
+    $dirq->remove($name);              # remove (requires lock)
+}
 ```
 
-# INHERITANCE
+- `lock()` is permissive by default — returns false if the element is already
+  locked, rather than dying
+- `get()` and `remove()` require the element to be locked first
+- If a process dies while holding a lock, `purge()` will clean up after
+  `maxlock` seconds (default: 600)
 
-Regardless of how the directory queue object is created, it inherits from the
-`Directory::Queue` class. You can therefore test if an object is a directory
-queue (of any kind) by using:
+## Constructor Options
 
+Options common to Simple and Normal queues:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `path` | *(required)* | Queue toplevel directory |
+| `umask` | process umask | Umask for created files and directories |
+| `maxlock` | 600 | Maximum lock age in seconds before purge unlocks it |
+| `maxtemp` | 300 | Maximum temp file age in seconds before purge removes it |
+| `rndhex` | random 0-15 | Hex digit to reduce name collisions |
+
+Additional options for Simple:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `granularity` | 60 | Time granularity (seconds) for intermediate directories |
+
+Additional options for Normal:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `schema` | *(required for add/get)* | Hash defining the data structure |
+| `maxelts` | 16000 | Maximum elements per intermediate directory |
+| `nlink` | false | Use nlink optimization (faster, but not all filesystems) |
+
+## FIFO Ordering
+
+The queue provides **best-effort FIFO** ordering. Elements are named using
+high-resolution timestamps, so they are very likely to be processed in
+insertion order. However, with multiple concurrent writers, strict FIFO cannot
+be guaranteed.
+
+## Security
+
+There are no specific security mechanisms in this module. The elements are
+stored as plain files and directories. Use filesystem permissions (owner,
+group, umask, ACLs) to protect the data.
+
+For multi-user queues, set `umask => 0` so all files are world-writable, then
+control access via the toplevel directory permissions.
+
+## See Also
+
+- [Directory::Queue::Simple](https://metacpan.org/pod/Directory::Queue::Simple) — simple queue implementation
+- [Directory::Queue::Normal](https://metacpan.org/pod/Directory::Queue::Normal) — normal queue with schemas
+- [Directory::Queue::Null](https://metacpan.org/pod/Directory::Queue::Null) — null queue (black hole)
+- [Directory::Queue::Set](https://metacpan.org/pod/Directory::Queue::Set) — iterate over multiple queues
+- [CPAN page](https://metacpan.org/pod/Directory::Queue)
+
+## Contributing
+
+Bug reports and pull requests are welcome on
+[GitHub](https://github.com/atoomic/perl-Directory-Queue).
+
+To run the test suite:
+
+```bash
+perl Makefile.PL
+make
+make test
 ```
-if ($object->isa("Directory::Queue")) ...
-```
 
-# BASE METHODS
+## Authors
 
-Here are the methods available in the base class and inherited by all
-directory queue implementations:
+Originally written by Lionel Cons at [CERN](https://cern.ch/).
 
-- new(PATH)
+Currently maintained by [Nicolas R.](https://github.com/atoomic)
 
-    return a new object (class method)
-
-- copy()
-
-    return a copy of the object
-
-- path()
-
-    return the queue toplevel path
-
-- id()
-
-    return a unique identifier for the queue
-
-- first()
-
-    return the first element in the queue, resetting the iterator;
-    return an empty string if the queue is empty
-
-- next()
-
-    return the next element in the queue, incrementing the iterator;
-    return an empty string if there is no next element
-
-# SECURITY
-
-There are no specific security mechanisms in this module.
-
-The elements are stored as plain files and directories. The filesystem
-security features (owner, group, permissions, ACLs...) should be used to
-adequately protect the data.
-
-By default, the process' umask is respected. See the class constructor
-documentation if you want an other behavior.
-
-If multiple readers and writers with different uids are expected, the easiest
-solution is to have all the files and directories inside the toplevel
-directory world-writable (i.e. umask=0). Then, the permissions of the toplevel
-directory itself (e.g. group-writable) are enough to control who can access
-the queue.
-
-# SEE ALSO
-
-[Directory::Queue::Normal](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ANormal),
-[Directory::Queue::Null](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ANull),
-[Directory::Queue::Set](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ASet),
-[Directory::Queue::Simple](https://metacpan.org/pod/Directory%3A%3AQueue%3A%3ASimple).
-
-# AUTHOR
-
-Lionel Cons [http://cern.ch/lionel.cons](http://cern.ch/lionel.cons)
-
-Copyright (C) CERN 2010-2024
-
-# AUTHOR
-
-Lionel Cons <lionel.cons@cern.ch>
-
-# COPYRIGHT AND LICENSE
+## License
 
 This software is copyright (c) 2010 by CERN.
 
