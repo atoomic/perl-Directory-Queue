@@ -253,14 +253,14 @@ sub _new : method {
     my($self, $path);
 
     # path is mandatory
-    dief("missing option: path") unless defined($option{"path"});
-    dief("not a directory: %s", $option{"path"})
-        if -e $option{"path"} and not -d _;
+    dief("missing option: path") unless defined($option{path});
+    dief("not a directory: %s", $option{path})
+        if -e $option{path} and not -d _;
     # build the object
     $self = {
-        "path" => $option{"path"}, # toplevel path
-        "dirs" => [],              # cached list of intermediate directories
-        "elts" => [],              # cached list of elements
+        path => $option{path}, # toplevel path
+        dirs => [],            # cached list of intermediate directories
+        elts => [],            # cached list of elements
     };
     # check the integer options
     foreach my $name (qw(maxlock maxtemp rndhex umask)) {
@@ -268,40 +268,26 @@ sub _new : method {
         dief("invalid %s: %s", $name, $option{$name})
             unless $option{$name} =~ /^\d+$/;
     }
-    # handle the maxlock option
-    if (defined($option{"maxlock"})) {
-        $self->{"maxlock"} = $option{"maxlock"};
-    } else {
-        $self->{"maxlock"} = 600;
-    }
-    # handle the maxtemp option
-    if (defined($option{"maxtemp"})) {
-        $self->{"maxtemp"} = $option{"maxtemp"};
-    } else {
-        $self->{"maxtemp"} = 300;
-    }
-    # handle the rndhex option
-    if (defined($option{"rndhex"})) {
-        dief("invalid rndhex: %s", $option{"rndhex"})
-            unless $option{"rndhex"} < 16;
-        $self->{"rndhex"} = $option{"rndhex"};
-    } else {
-        $self->{"rndhex"} = int(rand(16));
-    }
-    # handle the umask option
-    if (defined($option{"umask"})) {
-        dief("invalid umask: %s", $option{"umask"})
-            unless $option{"umask"} < 512;
-        $self->{"umask"} = $option{"umask"};
+    # handle options with defaults
+    $self->{maxlock} = defined($option{maxlock}) ? $option{maxlock} : 600;
+    $self->{maxtemp} = defined($option{maxtemp}) ? $option{maxtemp} : 300;
+    $self->{rndhex}  = defined($option{rndhex})  ? $option{rndhex}  : int(rand(16));
+    # validate range constraints
+    dief("invalid rndhex: %s", $self->{rndhex})
+        unless $self->{rndhex} < 16;
+    if (defined($option{umask})) {
+        dief("invalid umask: %s", $option{umask})
+            unless $option{umask} < 512;
+        $self->{umask} = $option{umask};
     }
     # create the toplevel directory if needed
     $path = "";
-    foreach my $name (split(/\/+/, $self->{"path"})) {
+    foreach my $name (split(/\/+/, $self->{path})) {
         $path .= $name . "/";
-        _special_mkdir($path, $self->{"umask"}) unless -d $path;
+        _special_mkdir($path, $self->{umask}) unless -d $path;
     }
     # store the unique queue identifier
-    $self->{"id"} = _path2id($self->{"path"});
+    $self->{id} = _path2id($self->{path});
     # that's it!
     bless($self, $class);
     return($self);
@@ -321,8 +307,8 @@ sub copy : method {
     my($copy);
 
     $copy = { %{ $self } };
-    $copy->{"dirs"} = [];
-    $copy->{"elts"} = [];
+    $copy->{dirs} = [];
+    $copy->{elts} = [];
     bless($copy, ref($self));
     return($copy);
 }
@@ -334,7 +320,7 @@ sub copy : method {
 sub path : method {
     my($self) = @_;
 
-    return($self->{"path"});
+    return($self->{path});
 }
 
 #
@@ -344,7 +330,7 @@ sub path : method {
 sub id : method {
     my($self) = @_;
 
-    return($self->{"id"});
+    return($self->{id});
 }
 
 #
@@ -355,15 +341,15 @@ sub next : method { ## no critic 'ProhibitBuiltinHomonyms'
     my($self) = @_;
     my($dir, @list);
 
-    return(shift(@{ $self->{"elts"} })) if @{ $self->{"elts"} };
-    while (@{ $self->{"dirs"} }) {
-        $dir = shift(@{ $self->{"dirs"} });
-        foreach my $name (_special_getdir($self->{"path"} . "/" . $dir)) {
+    return(shift(@{ $self->{elts} })) if @{ $self->{elts} };
+    while (@{ $self->{dirs} }) {
+        $dir = shift(@{ $self->{dirs} });
+        foreach my $name (_special_getdir($self->{path} . "/" . $dir)) {
             push(@list, $1) if $name =~ /^($_ElementRegexp)$/o; # untaint
         }
         next unless @list;
-        $self->{"elts"} = [ map("$dir/$_", sort(@list)) ];
-        return(shift(@{ $self->{"elts"} }));
+        $self->{elts} = [ map("$dir/$_", sort(@list)) ];
+        return(shift(@{ $self->{elts} }));
     }
     return("");
 }
@@ -376,11 +362,11 @@ sub first : method {
     my($self) = @_;
     my(@list);
 
-    foreach my $name (_special_getdir($self->{"path"}, "strict")) {
+    foreach my $name (_special_getdir($self->{path}, "strict")) {
         push(@list, $1) if $name =~ /^($_DirectoryRegexp)$/o; # untaint
     }
-    $self->{"dirs"} = [ sort(@list) ];
-    $self->{"elts"} = [];
+    $self->{dirs} = [ sort(@list) ];
+    $self->{elts} = [];
     return($self->next());
 }
 

@@ -401,7 +401,7 @@ sub unlock : method {
 sub touch : method {
     my($self, $element) = @_;
 
-    _touch($self->{"path"}."/".$element);
+    _touch($self->{path}."/".$element);
 }
 
 #
@@ -494,25 +494,22 @@ sub get : method {
         unless _is_locked($self, $element);
     foreach my $name (keys(%{ $self->{type} })) {
         $path = "$self->{path}/$element/$name";
+        my $type = $self->{type}{$name};
         unless (lstat($path)) {
             dief("cannot lstat(%s): %s", $path, $!) unless $! == ENOENT;
-            if ($self->{mandatory}{$name}) {
-                dief("missing data file: %s", $path);
-            } else {
-                next;
-            }
+            dief("missing data file: %s", $path) if $self->{mandatory}{$name};
+            next;
         }
-        if ($self->{type}{$name} =~ /^(binary|string)$/) {
-            if ($self->{type}{$name} eq "string") {
-                $ref = _file_read_utf8($path);
-            } else {
-                $ref = _file_read_bin($path);
-            }
+        if ($type eq "string") {
+            $ref = _file_read_utf8($path);
             $data{$name} = $self->{ref}{$name} ? $ref : ${ $ref };
-        } elsif ($self->{type}{$name} eq "table") {
+        } elsif ($type eq "binary") {
+            $ref = _file_read_bin($path);
+            $data{$name} = $self->{ref}{$name} ? $ref : ${ $ref };
+        } elsif ($type eq "table") {
             $data{$name} = _string2hash(_file_read_utf8($path));
         } else {
-            dief("unexpected data type: %s", $self->{type}{$name});
+            dief("unexpected data type: %s", $type);
         }
     }
     return(\%data) unless wantarray();
@@ -567,29 +564,26 @@ sub _add_data ($$$) {
     my($ref, $utf8, $tmp, $path, $fh);
 
     foreach my $name (keys(%{ $data })) {
-        dief("unexpected data: %s", $name) unless $self->{type}{$name};
-        if ($self->{type}{$name} =~ /^(binary|string)$/) {
+        my $type = $self->{type}{$name};
+        dief("unexpected data: %s", $name) unless $type;
+        if ($type eq "binary" or $type eq "string") {
             if ($self->{ref}{$name}) {
-                dief("unexpected %s data in %s: %s",
-                     $self->{type}{$name}, $name, $data->{$name})
+                dief("unexpected %s data in %s: %s", $type, $name, $data->{$name})
                     unless ref($data->{$name}) eq "SCALAR";
                 $ref = $data->{$name};
             } else {
-                dief("unexpected %s data in %s: %s",
-                     $self->{type}{$name}, $name, $data->{$name})
+                dief("unexpected %s data in %s: %s", $type, $name, $data->{$name})
                     if ref($data->{$name});
                 $ref = \$data->{$name};
             }
-            $utf8 = $self->{type}{$name} eq "string";
-        } elsif ($self->{type}{$name} eq "table") {
-            dief("unexpected %s data in %s: %s",
-                 $self->{type}{$name}, $name, $data->{$name})
+            $utf8 = $type eq "string";
+        } elsif ($type eq "table") {
+            dief("unexpected %s data in %s: %s", $type, $name, $data->{$name})
                 unless ref($data->{$name}) eq "HASH";
             $ref = _hash2string($data->{$name});
             $utf8 = 1;
         } else {
-            dief("unexpected data type in %s: %s",
-                 $name, $self->{type}{$name});
+            dief("unexpected data type in %s: %s", $name, $type);
         }
         if ($utf8) {
             eval {
@@ -656,15 +650,11 @@ sub _volatile ($) {
     my($self) = @_;
     my(@list);
 
-    foreach my $name (_special_getdir($self->{path} .
-                                      "/" . TEMPORARY_DIRECTORY)) {
-        push(@list, TEMPORARY_DIRECTORY."/".$1)
-            if $name =~ /^($_ElementRegexp)$/o; # untaint
-    }
-    foreach my $name (_special_getdir($self->{path} .
-                                      "/" . OBSOLETE_DIRECTORY)) {
-        push(@list, OBSOLETE_DIRECTORY."/".$1)
-            if $name =~ /^($_ElementRegexp)$/o; # untaint
+    foreach my $subdir (TEMPORARY_DIRECTORY, OBSOLETE_DIRECTORY) {
+        foreach my $name (_special_getdir($self->{path} . "/" . $subdir)) {
+            push(@list, $subdir . "/" . $1)
+                if $name =~ /^($_ElementRegexp)$/o; # untaint
+        }
     }
     return(@list);
 }
