@@ -20,7 +20,7 @@ our $REVISION = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
 # used modules
 #
 
-use Directory::Queue qw(_create _name _touch SYSBUFSIZE /Regexp/ /special/);
+use Directory::Queue qw(_check_element _create _name _touch SYSBUFSIZE /Regexp/ /special/);
 use No::Worries::Die qw(dief);
 use No::Worries::File qw(file_read file_write);
 use No::Worries::Stat qw(ST_MTIME);
@@ -154,6 +154,7 @@ sub add_path : method {
 sub get : method {
     my($self, $name) = @_;
 
+    _check_element($name);
     return(file_read($self->{path}."/".$name . LOCKED_SUFFIX));
 }
 
@@ -161,12 +162,14 @@ sub get_ref : method {
     my($self, $name) = @_;
     my($data);
 
+    _check_element($name);
     return(file_read($self->{path}."/".$name . LOCKED_SUFFIX, data => \$data));
 }
 
 sub get_path : method {
     my($self, $name) = @_;
 
+    _check_element($name);
     return($self->{path}."/".$name . LOCKED_SUFFIX);
 }
 
@@ -180,6 +183,7 @@ sub lock : method {  ## no critic 'ProhibitBuiltinHomonyms'
     my($self, $name, $permissive) = @_;
     my($path, $lock, $time, $ignored);
 
+    _check_element($name);
     $permissive = 1 unless defined($permissive);
     $path = $self->{path}."/".$name;
     $lock = $path . LOCKED_SUFFIX;
@@ -215,6 +219,7 @@ sub unlock : method {
     my($self, $name, $permissive) = @_;
     my($path, $lock);
 
+    _check_element($name);
     $permissive = 0 unless defined($permissive);
     $path = $self->{path}."/".$name;
     $lock = $path . LOCKED_SUFFIX;
@@ -230,6 +235,7 @@ sub unlock : method {
 sub touch : method {
     my($self, $element) = @_;
 
+    _check_element($element);
     _touch($self->{"path"}."/".$element);
 }
 
@@ -241,6 +247,7 @@ sub remove : method {
     my($self, $name) = @_;
     my($path, $lock);
 
+    _check_element($name);
     $path = $self->{path}."/".$name;
     $lock = $path . LOCKED_SUFFIX;
     unlink($path) or dief("cannot unlink(%s): %s", $path, $!);
