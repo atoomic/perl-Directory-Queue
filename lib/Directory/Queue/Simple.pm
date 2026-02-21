@@ -253,19 +253,14 @@ sub remove : method {
 
 sub count : method {
     my($self) = @_;
-    my($count, @list);
+    my($count);
 
     $count = 0;
-    # get the list of directories
     foreach my $name (_special_getdir($self->{path}, "strict")) {
-        push(@list, $1) if $name =~ /^($_DirectoryRegexp)$/o; # untaint
-    }
-    # count the elements inside
-    foreach my $name (@list) {
+        next unless $name =~ /^$_DirectoryRegexp$/o;
         $count += grep(/^(?:$_ElementRegexp)$/o,
                        _special_getdir($self->{path}."/".$name));
     }
-    # that's all
     return($count);
 }
 
@@ -277,7 +272,7 @@ sub _purge_dir ($$$) {
     my($dir, $oldtemp, $oldlock) = @_;
     my($path, @stat);
 
-    foreach my $name (grep(/\./, _special_getdir($dir))) {
+    foreach my $name (grep(index($_, ".") >= 0, _special_getdir($dir))) {
         $path = $dir."/".$name;
         @stat = stat($path);
         unless (@stat) {
@@ -307,7 +302,7 @@ sub purge : method {
     $option{maxlock} = $self->{maxtemp} unless defined($option{maxlock});
     foreach my $name (keys(%option)) {
         dief("unexpected option: %s", $name)
-            unless $name =~ /^(maxtemp|maxlock)$/;
+            unless $name eq "maxtemp" or $name eq "maxlock";
         dief("invalid %s: %s", $name, $option{$name})
             unless $option{$name} =~ /^\d+$/;
     }
