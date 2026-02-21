@@ -613,7 +613,7 @@ sub _add_data ($$$) {
 # note:
 #  - the destination directory must _not_ be created beforehand as it would
 #    be seen as a valid (but empty) element directory by an other process,
-#    we therefor use rename() from a temporary directory
+#    we therefore use rename() from a temporary directory
 #
 
 sub add : method {
@@ -977,7 +977,7 @@ remove the given element (which must be locked) from the queue
 get the data from the given element (which must be locked) and return
 basically the same hash as what add() got (in list context, the hash is
 returned directly while in scalar context, the hash reference is returned
-instead); the schema must be knownand the data must conform to it
+instead); the schema must be known and the data must conform to it
 
 =item purge([OPTIONS])
 
