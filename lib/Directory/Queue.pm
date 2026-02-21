@@ -157,7 +157,7 @@ sub _special_getdir ($;$) {
     my($dh, @list);
 
     if (opendir($dh, $path)) {
-        @list = grep($_ !~ /^\.\.?$/, readdir($dh));
+        @list = grep($_ ne "." && $_ ne "..", readdir($dh));
         closedir($dh) or dief("cannot closedir(%s): %s", $path, $!);
         return(@list);
     }
