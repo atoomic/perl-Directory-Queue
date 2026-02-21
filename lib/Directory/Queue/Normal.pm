@@ -610,7 +610,7 @@ sub _add_data ($$$) {
 # note:
 #  - the destination directory must _not_ be created beforehand as it would
 #    be seen as a valid (but empty) element directory by an other process,
-#    we therefor use rename() from a temporary directory
+#    we therefore use rename() from a temporary directory
 #
 
 sub add : method {
@@ -764,16 +764,16 @@ Directory::Queue::Normal - object oriented interface to a normal directory based
   #  - there can be a "header" which is a table/hash
   #
 
-  $schema = { "body" => "string", "header" => "table?" };
-  $queuedir = "/tmp/test";
+  my $schema = { "body" => "string", "header" => "table?" };
+  my $queuedir = "/tmp/test";
 
   #
   # sample producer
   #
 
-  $dirq = Directory::Queue::Normal->new(path => $queuedir, schema => $schema);
-  foreach $count (1 .. 100) {
-      $name = $dirq->add(body => "element $count\n", header => \%ENV);
+  my $dirq = Directory::Queue::Normal->new(path => $queuedir, schema => $schema);
+  foreach my $count (1 .. 100) {
+      my $name = $dirq->add(body => "element $count\n", header => \%ENV);
       printf("# added element %d as %s\n", $count, $name);
   }
 
@@ -782,10 +782,10 @@ Directory::Queue::Normal - object oriented interface to a normal directory based
   #
 
   $dirq = Directory::Queue::Normal->new(path => $queuedir, schema => $schema);
-  for ($name = $dirq->first(); $name; $name = $dirq->next()) {
+  for (my $name = $dirq->first(); $name; $name = $dirq->next()) {
       next unless $dirq->lock($name);
       printf("# reading element %s\n", $name);
-      %data = $dirq->get($name);
+      my %data = $dirq->get($name);
       # one can use $data{body} and $data{header} here...
       # one could use $dirq->unlock($name) to only browse the queue...
       $dirq->remove($name);
@@ -798,8 +798,8 @@ Directory::Queue::Normal - object oriented interface to a normal directory based
   $dirq = Directory::Queue::Normal->new(path => $queuedir, schema => $schema);
   while (1) {
       sleep(1) unless $dirq->count();
-      for ($name = $dirq->first(); $name; $name = $dirq->next()) {
-          ... same as above ...
+      for (my $name = $dirq->first(); $name; $name = $dirq->next()) {
+          # ... same as above ...
       }
   }
 
@@ -974,7 +974,7 @@ remove the given element (which must be locked) from the queue
 get the data from the given element (which must be locked) and return
 basically the same hash as what add() got (in list context, the hash is
 returned directly while in scalar context, the hash reference is returned
-instead); the schema must be knownand the data must conform to it
+instead); the schema must be known and the data must conform to it
 
 =item purge([OPTIONS])
 

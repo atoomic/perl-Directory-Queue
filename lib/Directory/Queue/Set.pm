@@ -154,11 +154,11 @@ Directory::Queue::Set - object oriented interface to a set of Directory::Queue o
   use Directory::Queue;
   use Directory::Queue::Set;
 
-  $dq1 = Directory::Queue->new(path => "/tmp/q1");
-  $dq2 = Directory::Queue->new(path => "/tmp/q2");
-  $dqset = Directory::Queue::Set->new($dq1, $dq2);
+  my $dq1 = Directory::Queue->new(path => "/tmp/q1");
+  my $dq2 = Directory::Queue->new(path => "/tmp/q2");
+  my $dqset = Directory::Queue::Set->new($dq1, $dq2);
 
-  ($dq, $elt) = $dqset->first();
+  my ($dq, $elt) = $dqset->first();
   while ($dq) {
       # you can now process the element $elt of queue $dq...
       ($dq, $elt) = $dqset->next();

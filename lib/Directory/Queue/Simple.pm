@@ -352,9 +352,9 @@ Directory::Queue::Simple - object oriented interface to a simple directory based
   # sample producer
   #
 
-  $dirq = Directory::Queue::Simple->new(path => "/tmp/test");
-  foreach $count (1 .. 100) {
-      $name = $dirq->add("element $count\n");
+  my $dirq = Directory::Queue::Simple->new(path => "/tmp/test");
+  foreach my $count (1 .. 100) {
+      my $name = $dirq->add("element $count\n");
       printf("# added element %d as %s\n", $count, $name);
   }
 
@@ -363,10 +363,10 @@ Directory::Queue::Simple - object oriented interface to a simple directory based
   #
 
   $dirq = Directory::Queue::Simple->new(path => "/tmp/test");
-  for ($name = $dirq->first(); $name; $name = $dirq->next()) {
+  for (my $name = $dirq->first(); $name; $name = $dirq->next()) {
       next unless $dirq->lock($name);
       printf("# reading element %s\n", $name);
-      $data = $dirq->get($name);
+      my $data = $dirq->get($name);
       # one could use $dirq->unlock($name) to only browse the queue...
       $dirq->remove($name);
   }

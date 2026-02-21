@@ -121,7 +121,7 @@ sub _special_mkdir ($$) {
     }
     return(1) if $success;
     dief("cannot mkdir(%s): %s", $path, $!) unless $! == EEXIST and -d $path;
-    # RACE: someone else may have created it at the the same time
+    # RACE: someone else may have created it at the same time
     return(0);
 }
 
@@ -137,7 +137,7 @@ sub _special_rmdir ($) {
 
     return(1) if rmdir($path);
     dief("cannot rmdir(%s): %s", $path, $!) unless $! == ENOENT;
-    # RACE: someone else may have deleted it at the the same time
+    # RACE: someone else may have deleted it at the same time
     return(0);
 }
 
@@ -160,7 +160,7 @@ sub _special_getdir ($;$) {
     }
     dief("cannot opendir(%s): %s", $path, $!)
         unless $! == ENOENT and not $strict;
-    # RACE: someone else may have deleted it at the the same time
+    # RACE: someone else may have deleted it at the same time
     return();
 }
 
@@ -187,7 +187,7 @@ sub _create ($$;$) {
     dief("cannot sysopen(%s, O_WRONLY|O_CREAT|O_EXCL): %s", $path, $!)
         unless ($! == EEXIST or $! == ENOENT) and not $strict;
     # RACE: someone else may have created the file (EEXIST)
-    # RACE: the containing directory may be mising (ENOENT)
+    # RACE: the containing directory may be missing (ENOENT)
     return(0);
 }
 
@@ -413,9 +413,11 @@ Directory::Queue - object oriented interface to a directory based queue
   # sample producer
   #
 
-  $dirq = Directory::Queue->new(path => "/tmp/test");
-  foreach $count (1 .. 100) {
-      $name = $dirq->add(... some data ...);
+  my $dirq = Directory::Queue->new(path => "/tmp/test");
+  foreach my $count (1 .. 100) {
+      my $name = $dirq->add(<<'EOS');
+  ... some data ...
+  EOS
       printf("# added element %d as %s\n", $count, $name);
   }
 
@@ -424,10 +426,10 @@ Directory::Queue - object oriented interface to a directory based queue
   #
 
   $dirq = Directory::Queue->new(path => "/tmp/test");
-  for ($name = $dirq->first(); $name; $name = $dirq->next()) {
+  for (my $name = $dirq->first(); $name; $name = $dirq->next()) {
       next unless $dirq->lock($name);
       printf("# reading element %s\n", $name);
-      $data = $dirq->get($name);
+      my $data = $dirq->get($name);
       # one could use $dirq->unlock($name) to only browse the queue...
       $dirq->remove($name);
   }

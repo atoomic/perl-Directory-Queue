@@ -119,9 +119,11 @@ Directory::Queue::Null - object oriented interface to a null directory based que
 =head1 SYNOPSIS
 
   use Directory::Queue::Null;
-  $dirq = Directory::Queue::Null->new();
-  foreach $count (1 .. 100) {
-      $name = $dirq->add(... some data ...);
+  my $dirq = Directory::Queue::Null->new();
+  foreach my $count (1 .. 100) {
+      my $name = $dirq->add( <<'EOS' );
+  ... some data ...
+  EOS
   }
 
 =head1 DESCRIPTION
