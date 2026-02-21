@@ -583,4 +583,4 @@ L<Directory::Queue>.
 
 Lionel Cons L<http://cern.ch/lionel.cons>
 
-Copyright (C) CERN 2010-2024
+Copyright (C) CERN 2010-2025
