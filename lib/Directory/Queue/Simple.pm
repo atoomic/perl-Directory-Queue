@@ -304,7 +304,7 @@ sub purge : method {
 
     # check options
     $option{maxtemp} = $self->{maxtemp} unless defined($option{maxtemp});
-    $option{maxlock} = $self->{maxtemp} unless defined($option{maxlock});
+    $option{maxlock} = $self->{maxlock} unless defined($option{maxlock});
     foreach my $name (keys(%option)) {
         dief("unexpected option: %s", $name)
             unless $name =~ /^(maxtemp|maxlock)$/;
