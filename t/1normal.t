@@ -59,28 +59,28 @@ test_field("string", "Unicode", STR_UNICODE);
 is($dq->count(), 2, "count 2");
 
 $elt = $dq->first();
-ok($elt, "first");
-ok(!$dq->_is_locked($elt), "lock testing 1");
-ok($dq->lock($elt), "lock");
-ok( $dq->_is_locked($elt), "lock testing 2");
-ok($dq->unlock($elt), "unlock");
-ok(!$dq->_is_locked($elt), "lock testing 3");
+ok($elt, "first() returns an element");
+ok(!$dq->_is_locked($elt), "new element is not locked");
+ok($dq->lock($elt), "lock() succeeds");
+ok( $dq->_is_locked($elt), "element is locked after lock()");
+ok($dq->unlock($elt), "unlock() succeeds");
+ok(!$dq->_is_locked($elt), "element is unlocked after unlock()");
 
 $elt = $dq->next();
-ok($elt, "next");
-ok($dq->lock($elt), "lock");
+ok($elt, "next() returns an element");
+ok($dq->lock($elt), "lock second element");
 eval { $dq->remove($elt) };
-is($@, "", "remove 1");
-is($dq->count(), 1, "count 1");
+is($@, "", "remove locked element succeeds");
+is($dq->count(), 1, "count is 1 after removing one of two");
 
 $elt = $dq->first();
-ok($elt, "first");
+ok($elt, "first() still returns remaining element");
 eval { $dq->remove($elt) };
-like($@, qr/not locked/, "remove 2");
-ok($dq->lock($elt), "lock");
+like($@, qr/not locked/, "remove unlocked element dies");
+ok($dq->lock($elt), "lock remaining element");
 eval { $dq->remove($elt) };
-is($@, "", "remove 3");
-is($dq->count(), 0, "count 0");
+is($@, "", "remove last locked element succeeds");
+is($dq->count(), 0, "count is 0 after removing all");
 
 $dq = Directory::Queue::Normal->new(path => $tmpdir, schema => { binary => "binary" });
 $elt = $dq->add(binary => STR_ISO8859);
@@ -89,19 +89,20 @@ test_field("binary", "ISO-8859-1", STR_ISO8859);
 $tmp = "foobar";
 $dq = Directory::Queue::Normal->new(path => $tmpdir, schema => { binary => "binary*" });
 eval { $elt = $dq->add(binary => $tmp) };
-like($@, qr/unexpected/, "add by reference 1");
+like($@, qr/unexpected/, "add scalar to binary* field dies (expects reference)");
 eval { $elt = $dq->add(binary => \$tmp) };
-is($@, "", "add by reference 2");
+is($@, "", "add reference to binary* field succeeds");
 test_field("binary", "by reference", $tmp);
 
 $tmp = $dq->count();
 $dq = Directory::Queue::Normal->new(path => $tmpdir, schema => { string => "binary" }, maxelts => $tmp);
 @list = sort(dir_read($tmpdir));
-is("@list", "00000000 obsolete temporary", "subdirs 1");
+is("@list", "00000000 obsolete temporary", "one intermediate dir before overflow");
 $elt = $dq->add(string => $tmp);
 @list = sort(dir_read($tmpdir));
-is("@list", "00000000 00000001 obsolete temporary", "subdirs 2");
+is("@list", "00000000 00000001 obsolete temporary", "new intermediate dir created when maxelts reached");
 
+# Purge test: age two locked elements, touch one, purge should only unlock the untouched one
 $time = time() - 10;
 $elt = $dq->first();
 $dq->lock($elt);
@@ -118,42 +119,40 @@ $tmp = 0;
     local $SIG{__WARN__} = sub { $tmp++ if $_[0] =~ /removing too old locked/ };
     $dq->purge(maxlock => 5);
 }
-is($tmp, 1, "purge 1");
+is($tmp, 1, "purge unlocks one stale lock (touched element kept)");
 $elt = $dq->first();
 $elt = $dq->next();
-ok($dq->lock($elt), "purge 2");
-is($dq->count(), 3, "purge 3");
+ok($dq->lock($elt), "purged element can be re-locked");
+is($dq->count(), 3, "count unchanged after purge (elements still exist)");
 
 $dq = Directory::Queue::Normal->new(path => $tmpdir, schema => { string => "binary", optional => "string?" });
-$tmp = "add by hash";
-ok($dq->add(string => $tmp), "$tmp 1");
-ok($dq->add(string => $tmp, optional => "yes"), "$tmp 2");
-$tmp = "add by hash ref";
-ok($dq->add({string => $tmp}), "$tmp 1");
-ok($dq->add({string => $tmp, optional => "yes"}), "$tmp 2");
+ok($dq->add(string => "add by hash"), "add() with hash args (mandatory only)");
+ok($dq->add(string => "add by hash", optional => "yes"), "add() with hash args (mandatory + optional)");
+ok($dq->add({string => "add by hash ref"}), "add() with hashref (mandatory only)");
+ok($dq->add({string => "add by hash ref", optional => "yes"}), "add() with hashref (mandatory + optional)");
 
 $elt = $dq->add(string => "foo", optional => "bar");
 eval { @list = $dq->get($elt) };
-like($@, qr/not locked/, "get");
-ok($dq->lock($elt), "lock");
+like($@, qr/not locked/, "get() on unlocked element dies");
+ok($dq->lock($elt), "lock for get test");
 eval { @list = $dq->get($elt) };
-is($@, "", "get by hash 1");
-is(scalar(@list), 4, "get by hash 2");
+is($@, "", "get() in list context succeeds");
+is(scalar(@list), 4, "get() returns 4 items (2 key-value pairs)");
 eval { $tmp = $dq->get($elt) };
-is($@, "", "get by hash ref 1");
-is(ref($tmp), "HASH", "get by hash ref 2");
+is($@, "", "get() in scalar context succeeds");
+is(ref($tmp), "HASH", "get() in scalar context returns hashref");
 
 $dq = Directory::Queue::Normal->new(path => $tmpdir);
 $tmp = 0;
 for ($elt = $dq->first(); $elt; $elt = $dq->next()) {
     $tmp++;
 }
-is($dq->count(), $tmp, "iteration");
+is($dq->count(), $tmp, "count() matches iterator traversal");
 for ($elt = $dq->first(); $elt; $elt = $dq->next()) {
     $dq->lock($elt); # don't care if failed...
     $dq->remove($elt);
 }
-is($dq->count(), 0, "emptying");
+is($dq->count(), 0, "queue empty after removing all elements");
 $dq->purge();
 @list = sort(dir_read($tmpdir));
-is("@list", "00000001 obsolete temporary", "purged");
+is("@list", "00000001 obsolete temporary", "purge cleaned empty intermediate dirs");
