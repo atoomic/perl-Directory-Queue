@@ -243,8 +243,8 @@ sub remove : method {
 
     $path = $self->{path}."/".$name;
     $lock = $path . LOCKED_SUFFIX;
-    unlink($path) or dief("cannot unlink(%s): %s", $path, $!);
     unlink($lock) or dief("cannot unlink(%s): %s", $lock, $!);
+    unlink($path) or dief("cannot unlink(%s): %s", $path, $!);
 }
 
 #
