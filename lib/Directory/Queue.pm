@@ -235,6 +235,8 @@ sub new : method {
     my($subclass);
 
     $option{"type"} ||= "Simple";
+    dief("invalid type: %s", $option{"type"})
+        unless $option{"type"} =~ /^[A-Za-z_]\w*$/;
     $subclass = $class . "::" . $option{"type"};
     _require($subclass);
     delete($option{"type"});
