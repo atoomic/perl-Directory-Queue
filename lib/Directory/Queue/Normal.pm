@@ -27,6 +27,7 @@ use No::Worries::File qw(file_read file_write);
 use No::Worries::Stat qw(ST_MTIME ST_NLINK);
 use No::Worries::Warn qw(warnf);
 use POSIX qw(:errno_h);
+use Time::HiRes qw(usleep);
 
 #
 # inheritance
@@ -46,6 +47,12 @@ use constant OBSOLETE_DIRECTORY => "obsolete";
 
 # name of the directory indicating a locked element
 use constant LOCKED_DIRECTORY => "locked";
+
+# maximum retries for race-prone rename/rmdir loops in remove()
+use constant REMOVE_MAX_RETRIES => 10;
+
+# initial backoff delay in microseconds (doubles each retry)
+use constant REMOVE_BACKOFF_USEC => 1_000;
 
 #
 # global variables
@@ -414,6 +421,7 @@ sub remove : method {
         unless _is_locked($self, $element);
     # move the element out of its intermediate directory
     $path = $self->{path}."/".$element;
+    my $retries = 0;
     while (1) {
         $temp = $self->{path}
            ."/".OBSOLETE_DIRECTORY
@@ -422,6 +430,9 @@ sub remove : method {
         dief("cannot rename(%s, %s): %s", $path, $temp, $!)
             unless $! == ENOTEMPTY or $! == EEXIST;
         # RACE: the target directory was already present...
+        dief("cannot rename %s: too many retries", $path)
+            if ++$retries >= REMOVE_MAX_RETRIES;
+        usleep(REMOVE_BACKOFF_USEC << ($retries - 1));
     }
     # remove the data files
     foreach my $name (_special_getdir($temp, "strict")) {
@@ -436,6 +447,7 @@ sub remove : method {
     }
     # remove the locked directory
     $path = $temp."/".LOCKED_DIRECTORY;
+    $retries = 0;
     while (1) {
         rmdir($path) or dief("cannot rmdir(%s): %s", $path, $!);
         rmdir($temp) and return;
@@ -444,6 +456,9 @@ sub remove : method {
         # RACE: this can happen if an other process managed to lock this element
         # while it was being removed (see the comment in the lock() method)
         # so we try to remove the lock again and again...
+        dief("cannot remove %s: too many lock contentions", $temp)
+            if ++$retries >= REMOVE_MAX_RETRIES;
+        usleep(REMOVE_BACKOFF_USEC << ($retries - 1));
     }
 }
 
