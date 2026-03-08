@@ -86,8 +86,14 @@ sub _hash2string ($) {
         $value = $hash->{$key};
         dief("undefined hash value: %s", $key) unless defined($value);
         dief("invalid hash scalar: %s", $value) if ref($value);
-        $key   =~ s/([\x5c\x09\x0a])/$_Byte2Esc{$1}/g;
-        $value =~ s/([\x5c\x09\x0a])/$_Byte2Esc{$1}/g;
+        $key   =~ s/([\x5c\x09\x0a])/$_Byte2Esc{$1}/g
+            if index($key, "\x5c") >= 0
+            or index($key, "\x09") >= 0
+            or index($key, "\x0a") >= 0;
+        $value =~ s/([\x5c\x09\x0a])/$_Byte2Esc{$1}/g
+            if index($value, "\x5c") >= 0
+            or index($value, "\x09") >= 0
+            or index($value, "\x0a") >= 0;
         $string .= $key . "\x09" . $value . "\x0a";
     }
     return(\$string);
@@ -110,8 +116,8 @@ sub _string2hash ($) {
         } else {
             dief("unexpected hash line: %s", $line);
         }
-        $key   =~ s/(\\[\\tn])/$_Esc2Byte{$1}/g;
-        $value =~ s/(\\[\\tn])/$_Esc2Byte{$1}/g;
+        $key   =~ s/(\\[\\tn])/$_Esc2Byte{$1}/g if index($key,   "\\") >= 0;
+        $value =~ s/(\\[\\tn])/$_Esc2Byte{$1}/g if index($value, "\\") >= 0;
         $hash{$key} = $value;
     }
     return(\%hash);
@@ -269,19 +275,14 @@ sub new : method {
 
 sub count : method {
     my($self) = @_;
-    my($count, @list, $subdirs);
+    my($count, $subdirs);
 
     $count = 0;
-    # get the list of existing directories
     foreach my $name (_special_getdir($self->{path}, "strict")) {
-        push(@list, $1) if $name =~ /^($_DirectoryRegexp)$/o; # untaint
-    }
-    # count sub-directories
-    foreach my $name (@list) {
+        next unless $name =~ /^$_DirectoryRegexp$/o;
         $subdirs = _subdirs($self, $self->{path}."/".$name);
         $count += $subdirs if $subdirs;
     }
-    # that's all
     return($count);
 }
 
@@ -493,6 +494,7 @@ sub get : method {
     dief("cannot get %s: not locked", $element)
         unless _is_locked($self, $element);
     foreach my $name (keys(%{ $self->{type} })) {
+        my $type = $self->{type}{$name};
         $path = "$self->{path}/$element/$name";
         unless (lstat($path)) {
             dief("cannot lstat(%s): %s", $path, $!) unless $! == ENOENT;
@@ -502,17 +504,16 @@ sub get : method {
                 next;
             }
         }
-        if ($self->{type}{$name} =~ /^(binary|string)$/) {
-            if ($self->{type}{$name} eq "string") {
-                $ref = _file_read_utf8($path);
-            } else {
-                $ref = _file_read_bin($path);
-            }
+        if ($type eq "string") {
+            $ref = _file_read_utf8($path);
             $data{$name} = $self->{ref}{$name} ? $ref : ${ $ref };
-        } elsif ($self->{type}{$name} eq "table") {
+        } elsif ($type eq "binary") {
+            $ref = _file_read_bin($path);
+            $data{$name} = $self->{ref}{$name} ? $ref : ${ $ref };
+        } elsif ($type eq "table") {
             $data{$name} = _string2hash(_file_read_utf8($path));
         } else {
-            dief("unexpected data type: %s", $self->{type}{$name});
+            dief("unexpected data type: %s", $type);
         }
     }
     return(\%data) unless wantarray();
@@ -567,29 +568,30 @@ sub _add_data ($$$) {
     my($ref, $utf8, $tmp, $path, $fh);
 
     foreach my $name (keys(%{ $data })) {
-        dief("unexpected data: %s", $name) unless $self->{type}{$name};
-        if ($self->{type}{$name} =~ /^(binary|string)$/) {
+        my $type = $self->{type}{$name};
+        dief("unexpected data: %s", $name) unless $type;
+        if ($type eq "binary" or $type eq "string") {
             if ($self->{ref}{$name}) {
                 dief("unexpected %s data in %s: %s",
-                     $self->{type}{$name}, $name, $data->{$name})
+                     $type, $name, $data->{$name})
                     unless ref($data->{$name}) eq "SCALAR";
                 $ref = $data->{$name};
             } else {
                 dief("unexpected %s data in %s: %s",
-                     $self->{type}{$name}, $name, $data->{$name})
+                     $type, $name, $data->{$name})
                     if ref($data->{$name});
                 $ref = \$data->{$name};
             }
-            $utf8 = $self->{type}{$name} eq "string";
-        } elsif ($self->{type}{$name} eq "table") {
+            $utf8 = $type eq "string";
+        } elsif ($type eq "table") {
             dief("unexpected %s data in %s: %s",
-                 $self->{type}{$name}, $name, $data->{$name})
+                 $type, $name, $data->{$name})
                 unless ref($data->{$name}) eq "HASH";
             $ref = _hash2string($data->{$name});
             $utf8 = 1;
         } else {
             dief("unexpected data type in %s: %s",
-                 $name, $self->{type}{$name});
+                 $name, $type);
         }
         if ($utf8) {
             eval {
@@ -613,7 +615,7 @@ sub _add_data ($$$) {
 # note:
 #  - the destination directory must _not_ be created beforehand as it would
 #    be seen as a valid (but empty) element directory by an other process,
-#    we therefor use rename() from a temporary directory
+#    we therefore use rename() from a temporary directory
 #
 
 sub add : method {
@@ -705,7 +707,7 @@ sub purge : method {
     $option{maxlock} = $self->{maxlock} unless defined($option{maxlock});
     foreach my $name (keys(%option)) {
         dief("unexpected option: %s", $name)
-            unless $name =~ /^(maxtemp|maxlock)$/;
+            unless $name eq "maxtemp" or $name eq "maxlock";
         dief("invalid %s: %s", $name, $option{$name})
             unless $option{$name} =~ /^\d+$/;
     }
@@ -977,7 +979,7 @@ remove the given element (which must be locked) from the queue
 get the data from the given element (which must be locked) and return
 basically the same hash as what add() got (in list context, the hash is
 returned directly while in scalar context, the hash reference is returned
-instead); the schema must be knownand the data must conform to it
+instead); the schema must be known and the data must conform to it
 
 =item purge([OPTIONS])
 
@@ -1055,4 +1057,4 @@ L<Directory::Queue>.
 
 Lionel Cons L<http://cern.ch/lionel.cons>
 
-Copyright (C) CERN 2010-2024
+Copyright (C) CERN 2010-2025

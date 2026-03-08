@@ -124,7 +124,7 @@ sub _special_mkdir ($$) {
     }
     return(1) if $success;
     dief("cannot mkdir(%s): %s", $path, $!) unless $! == EEXIST and -d $path;
-    # RACE: someone else may have created it at the the same time
+    # RACE: someone else may have created it at the same time
     return(0);
 }
 
@@ -140,7 +140,7 @@ sub _special_rmdir ($) {
 
     return(1) if rmdir($path);
     dief("cannot rmdir(%s): %s", $path, $!) unless $! == ENOENT;
-    # RACE: someone else may have deleted it at the the same time
+    # RACE: someone else may have deleted it at the same time
     return(0);
 }
 
@@ -157,13 +157,13 @@ sub _special_getdir ($;$) {
     my($dh, @list);
 
     if (opendir($dh, $path)) {
-        @list = grep($_ !~ /^\.\.?$/, readdir($dh));
+        @list = grep($_ ne "." && $_ ne "..", readdir($dh));
         closedir($dh) or dief("cannot closedir(%s): %s", $path, $!);
         return(@list);
     }
     dief("cannot opendir(%s): %s", $path, $!)
         unless $! == ENOENT and not $strict;
-    # RACE: someone else may have deleted it at the the same time
+    # RACE: someone else may have deleted it at the same time
     return();
 }
 
@@ -190,7 +190,7 @@ sub _create ($$;$) {
     dief("cannot sysopen(%s, O_WRONLY|O_CREAT|O_EXCL): %s", $path, $!)
         unless ($! == EEXIST or $! == ENOENT) and not $strict;
     # RACE: someone else may have created the file (EEXIST)
-    # RACE: the containing directory may be mising (ENOENT)
+    # RACE: the containing directory may be missing (ENOENT)
     return(0);
 }
 
@@ -662,4 +662,4 @@ L<Directory::Queue::Simple>.
 
 Lionel Cons L<http://cern.ch/lionel.cons>
 
-Copyright (C) CERN 2010-2024
+Copyright (C) CERN 2010-2025
