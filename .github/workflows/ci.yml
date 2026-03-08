@@ -96,8 +96,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      # Pinned to v1.33.0 due to attestation bug in v1.34+ (shogo82148/actions-setup-perl#2481)
-      - uses: shogo82148/actions-setup-perl@v1.33.0
+      - uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: ${{ matrix.perl-version }}
       - run: perl -V
