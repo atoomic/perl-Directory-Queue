@@ -114,7 +114,7 @@ ok(!$dq->unlock($elt, 1), "permissive unlock on unlocked element returns false")
 # Test lock on non-existent element (permissive)
 #
 
-ok(!$dq->lock("00000000/nonexistent12345", 1), "lock non-existent permissive returns false");
+ok(!$dq->lock("00000000/00000000000000", 1), "lock non-existent permissive returns false");
 
 #
 # Test remove on unlocked element

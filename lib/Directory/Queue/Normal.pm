@@ -23,13 +23,14 @@ our $REVISION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 # used modules
 #
 
-use Directory::Queue qw(_create _name _touch /Regexp/ /special/);
+use Directory::Queue qw(_check_element _create _name _touch /Regexp/ /special/);
 use Encode qw(encode decode FB_CROAK LEAVE_SRC);
 use No::Worries::Die qw(dief);
 use No::Worries::File qw(file_read file_write);
 use No::Worries::Stat qw(ST_MTIME ST_NLINK);
 use No::Worries::Warn qw(warnf);
 use POSIX qw(:errno_h);
+use Time::HiRes qw();
 
 #
 # inheritance
@@ -49,6 +50,10 @@ use constant OBSOLETE_DIRECTORY => "obsolete";
 
 # name of the directory indicating a locked element
 use constant LOCKED_DIRECTORY => "locked";
+
+# retry limits for remove() race condition loops
+use constant REMOVE_MAX_RETRIES  => 10;
+use constant REMOVE_BACKOFF_USEC => 1_000; # 1ms initial, doubles each retry
 
 #
 # global variables
@@ -184,17 +189,6 @@ sub _subdirs ($$) {
     my($self, $path) = @_;
 
     return($self->{nlink} ? _subdirs_stat($path) : _subdirs_readdir($path));
-}
-
-#
-# check the given string to make sure it represents a valid element name
-#
-
-sub _check_element ($) {
-    my($element) = @_;
-
-    dief("invalid element: %s", $element)
-        unless $element =~ m/^(?:$_DirectoryRegexp)\/(?:$_ElementRegexp)$/o;
 }
 
 #+++############################################################################
@@ -401,6 +395,7 @@ sub unlock : method {
 sub touch : method {
     my($self, $element) = @_;
 
+    _check_element($element);
     _touch($self->{"path"}."/".$element);
 }
 
@@ -410,13 +405,14 @@ sub touch : method {
 
 sub remove : method {
     my($self, $element) = @_;
-    my($temp, $path);
+    my($temp, $path, $retries);
 
     _check_element($element);
     dief("cannot remove %s: not locked", $element)
         unless _is_locked($self, $element);
     # move the element out of its intermediate directory
     $path = $self->{path}."/".$element;
+    $retries = 0;
     while (1) {
         $temp = $self->{path}
            ."/".OBSOLETE_DIRECTORY
@@ -425,6 +421,9 @@ sub remove : method {
         dief("cannot rename(%s, %s): %s", $path, $temp, $!)
             unless $! == ENOTEMPTY or $! == EEXIST;
         # RACE: the target directory was already present...
+        dief("cannot rename(%s, ...): too many retries", $path)
+            if ++$retries >= REMOVE_MAX_RETRIES;
+        Time::HiRes::usleep(REMOVE_BACKOFF_USEC << $retries);
     }
     # remove the data files
     foreach my $name (_special_getdir($temp, "strict")) {
@@ -439,6 +438,7 @@ sub remove : method {
     }
     # remove the locked directory
     $path = $temp."/".LOCKED_DIRECTORY;
+    $retries = 0;
     while (1) {
         rmdir($path) or dief("cannot rmdir(%s): %s", $path, $!);
         rmdir($temp) and return;
@@ -447,6 +447,9 @@ sub remove : method {
         # RACE: this can happen if an other process managed to lock this element
         # while it was being removed (see the comment in the lock() method)
         # so we try to remove the lock again and again...
+        dief("cannot rmdir(%s): too many retries", $temp)
+            if ++$retries >= REMOVE_MAX_RETRIES;
+        Time::HiRes::usleep(REMOVE_BACKOFF_USEC << $retries);
     }
 }
 
