@@ -207,6 +207,17 @@ sub _touch ($) {
         or dief("cannot utime(%d, %d, %s): %s", $time, $time, $path, $!);
 }
 
+#
+# check the given string to make sure it represents a valid element name
+#
+
+sub _check_element ($) {
+    my($element) = @_;
+
+    dief("invalid element: %s", $element)
+        unless $element =~ m/^(?:$_DirectoryRegexp)\/(?:$_ElementRegexp)$/o;
+}
+
 #+++############################################################################
 #                                                                              #
 # Base Class                                                                   #
@@ -238,6 +249,8 @@ sub new : method {
     my($subclass);
 
     $option{"type"} ||= "Simple";
+    dief("invalid type: %s", $option{"type"})
+        unless $option{"type"} =~ /^[A-Za-z_]\w*$/;
     $subclass = $class . "::" . $option{"type"};
     _require($subclass);
     delete($option{"type"});
@@ -393,7 +406,7 @@ sub import : method {
 
     $pkg = shift(@_);
     foreach my $name (
-        qw(SYSBUFSIZE _name $_DirectoryRegexp $_ElementRegexp
+        qw(SYSBUFSIZE _name _check_element $_DirectoryRegexp $_ElementRegexp
            _special_getdir _special_mkdir _special_rmdir _create _touch)) {
         $exported{$name}++;
     }
